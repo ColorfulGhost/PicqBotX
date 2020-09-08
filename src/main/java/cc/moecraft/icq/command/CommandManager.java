@@ -8,11 +8,11 @@ import cc.moecraft.icq.event.events.message.EventMessage;
 import cc.moecraft.icq.event.events.message.EventPrivateMessage;
 import cc.moecraft.icq.user.Group;
 import cc.moecraft.icq.user.User;
+import cn.hutool.core.util.ClassUtil;
 import lombok.Getter;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+import java.lang.reflect.InvocationTargetException;
+import java.util.*;
 
 /**
  * The class {@code CommandManager} is a manager for command registration
@@ -26,24 +26,26 @@ import java.util.Map;
  * @since 2019-03-24 14:01
  */
 @Getter
-public class CommandManager
-{
+public class CommandManager {
     private PicqBotX bot;
 
-    /** 指令前缀 */
+    /**
+     * 指令前缀
+     */
     private final String[] prefixes;
 
-    /** 已注册的指令, [指令名, 指令对象] */
+    /**
+     * 已注册的指令, [指令名, 指令对象]
+     */
     private Map<String, IcqCommand> commands = new HashMap<>();
 
     /**
      * 构造一个指令管理器
      *
-     * @param bot 机器人对象
+     * @param bot      机器人对象
      * @param prefixes 前缀
      */
-    public CommandManager(PicqBotX bot, String... prefixes)
-    {
+    public CommandManager(PicqBotX bot, String... prefixes) {
         this.bot = bot;
         this.prefixes = prefixes;
     }
@@ -53,12 +55,32 @@ public class CommandManager
      *
      * @param commands 多个指令
      */
-    public void registerCommands(IcqCommand ... commands)
-    {
-        for (IcqCommand command : commands)
-        {
+    public void registerCommands(IcqCommand... commands) {
+        for (IcqCommand command : commands) {
             registerCommand(command);
         }
+    }
+
+    /**
+     * 注册所有指令
+     *
+     * @param packageName plugins包名 如: "cc.vimc.mcbot.bot.plugins"
+     */
+    public void registerAllCommands(String packageName) {
+        Set<Class<?>> scanClasses = ClassUtil.scanPackage(packageName);
+        Set<IcqCommand> pluginsClasses = new HashSet<>();
+        for (Class<?> pluginClass : scanClasses) {
+
+            IcqCommand icqCommand = null;
+            try {
+                icqCommand = (IcqCommand) pluginClass.getDeclaredConstructor().newInstance();
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+                e.printStackTrace();
+            }
+            pluginsClasses.add(icqCommand);
+
+        }
+        registerCommands(pluginsClasses.toArray(new IcqCommand[pluginsClasses.size()]));
     }
 
     /**
@@ -66,8 +88,7 @@ public class CommandManager
      *
      * @param command 指令
      */
-    public void registerCommand(IcqCommand command)
-    {
+    public void registerCommand(IcqCommand command) {
         commands.put(command.properties().getName().toLowerCase(), command);
         command.properties().getAlias().forEach(alias -> commands.put(alias.toLowerCase(), command));
     }
@@ -79,10 +100,9 @@ public class CommandManager
      * !ecHO hi there
      *
      * @param event 事件
-     * @param args 解析之后的指令 args
+     * @param args  解析之后的指令 args
      */
-    public void runCommand(EventMessage event, CommandArgs args)
-    {
+    public void runCommand(EventMessage event, CommandArgs args) {
         PicqBotX bot = event.getBot();
 
         final boolean isGM = event instanceof EventGroupMessage;
@@ -90,8 +110,7 @@ public class CommandManager
         final boolean isPM = event instanceof EventPrivateMessage;
 
         // 判断维护
-        if (bot.getConfig().isMaintenanceMode())
-        {
+        if (bot.getConfig().isMaintenanceMode()) {
             event.respond(bot.getConfig().getMaintenanceResponse());
             return;
         }
@@ -106,24 +125,17 @@ public class CommandManager
         // 调用指令执行方法
         IcqCommand runner = args.getCommandRunner();
 
-        if (runner instanceof EverywhereCommand)
-        {
+        if (runner instanceof EverywhereCommand) {
             event.respond(((EverywhereCommand) runner).run(event, user, args.getCommandName(), args.getArgs()));
-        }
-        else if (isGM && runner instanceof GroupCommand)
-        {
+        } else if (isGM && runner instanceof GroupCommand) {
             event.respond(((GroupCommand) runner).groupMessage((EventGroupMessage) event,
                     bot.getGroupUserManager().getUserFromID(user.getId(), group), group,
                     args.getCommandName(), args.getArgs()));
-        }
-        else if (isDM && runner instanceof DiscussCommand)
-        {
+        } else if (isDM && runner instanceof DiscussCommand) {
             event.respond(((DiscussCommand) runner).discussMessage((EventDiscussMessage) event,
                     bot.getGroupUserManager().getUserFromID(user.getId(), group), group,
                     args.getCommandName(), args.getArgs()));
-        }
-        else if (isPM && runner instanceof PrivateCommand)
-        {
+        } else if (isPM && runner instanceof PrivateCommand) {
             event.respond(((PrivateCommand) runner).privateMessage((EventPrivateMessage) event, user,
                     args.getCommandName(), args.getArgs()));
         }
@@ -134,8 +146,7 @@ public class CommandManager
      *
      * @return 指令列表
      */
-    public ArrayList<IcqCommand> getCommandList()
-    {
+    public ArrayList<IcqCommand> getCommandList() {
         ArrayList<IcqCommand> result = new ArrayList<>();
         commands.forEach((k, v) ->
         {
@@ -149,8 +160,7 @@ public class CommandManager
      *
      * @return 指令名列表
      */
-    public ArrayList<String> getCommandNameList()
-    {
+    public ArrayList<String> getCommandNameList() {
         return new ArrayList<>(commands.keySet());
     }
 }
